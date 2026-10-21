@@ -125,6 +125,11 @@ button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
 .skcard{background:var(--panel);border:3px solid #000;box-shadow:4px 4px 0 #000;padding:8px 8px 10px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
 .skcard.sel{border-color:var(--yel);background:var(--panel2)}
 .skpor{width:96px;height:112px}
+.skprev{width:100%;max-width:420px;background:radial-gradient(circle at 50% 60%,#2b3570,#161c38 70%);border:3px solid #000;box-shadow:5px 5px 0 #000;padding:6px 12px 12px;display:flex;flex-direction:column;align-items:center}
+#skinBig{width:170px;height:198px}
+#skinBigName{font-size:24px;color:var(--yel);text-shadow:2px 2px 0 #000}
+#skinBigInfo{font-size:13px;color:var(--muted);text-align:center}
+.skcard{cursor:pointer}.skcard.pv{outline:3px solid var(--cyan);outline-offset:2px}
 .sknm{font-family:var(--cond);font-weight:900;font-style:italic;text-transform:uppercase;font-size:15px;line-height:1.05;min-height:2.1em;display:flex;align-items:center}
 .skcard .btn.sm{margin-top:2px;font-size:14px;padding:8px 6px}
 .skcard .small{font-size:11.5px;color:var(--muted);line-height:1.3}
@@ -179,6 +184,7 @@ button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
 <section id="skins" class="screen">
   <div class="top"><button class="btn ghost back" data-act="heroes">Retour</button><span class="ph" id="skinPH"></span></div>
   <div class="h2 cond" id="skinTitle">Tenues</div>
+  <div class="skprev"><canvas id="skinBig"></canvas><div class="sknm" id="skinBigName"></div><div class="small" id="skinBigInfo"></div></div>
   <div class="skgrid" id="skinList"></div>
 </section>
 
@@ -194,12 +200,15 @@ button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
     <h3>Progression</h3>
     <p>Les vilains vaincus lâchent de l’XP. À chaque niveau, choisis une amélioration parmi trois : entraînement général ou évolution de ton Alter.</p>
     <p>Toutes les 5 vagues, un vilain célèbre attaque. Les zones qui se remplissent au sol annoncent une attaque : sors-en !</p>
+    <h3>Objectifs de vague</h3>
+    <p>Chaque vague a sa mission, affichée en haut de l’écran : survivre un certain temps, mettre un nombre de vilains K.O., sauver des civils (reste près d’eux quelques instants) ou abattre des vilains d’élite marqués d’une étoile. Toutes les 5 vagues, un boss. Une flèche au bord de l’écran indique les civils et les élites hors champ.</p>
+    <p>Mission accomplie : tous les vilains restants tombent, toute l’XP de la carte fonce vers toi, tu récupères un peu de PV et des Points de Héros bonus avant la vague suivante.</p>
     <h3>Jauge Plus Ultra</h3>
     <p>Elle se remplit quand tu mets des vilains K.O. ou que tu encaisses des coups. Pleine, le petit bouton au-dessus du spécial déclenche l’attaque ultime de ton héros.</p>
     <h3>Évolutions d’Alter</h3>
     <p>Monte deux améliorations précises de ton Alter au maximum : une carte dorée d’évolution apparaît au niveau suivant. Les conditions sont indiquées sur la fiche de chaque héros.</p>
     <h3>Tenues</h3>
-    <p>Chaque héros a 10 tenues à débloquer avec tes Points de Héros. La tenue Légende demande en plus d’atteindre la vague 20 avec ce héros.</p>
+    <p>Chaque héros a 10 tenues à débloquer avec tes Points de Héros. Touche une tenue pour la voir en grand, animée, avant de l’acheter. La tenue Légende demande en plus d’atteindre la vague 20 avec ce héros.</p>
     <h3>Bonus rares</h3>
     <p>Bento de Lunch Rush : soigne 30 PV. Étoile dorée : All Might débarque et met K.O. tous les vilains à l’écran.</p>
     <h3>Entre les parties</h3>
@@ -479,8 +488,9 @@ function newRun(){
     skin:sk,look:skinLook(h.id,sk),anim:null,tongues:[],storm:0,stormT:0,rockUlt:0,rockT:0,ultShadow:0,shBolt:1};
   p.hp=p.maxHp;lookFn(p.look);
   G={p,en:[],shots:[],es:[],fx:[],tx:[],gems:[],zones:[],pz:[],pend:[],wave:1,waveT:0,waveLen:25,spawnT:1,time:0,
-     kills:0,bosses:0,boss:null,shake:0,flash:0,hurtT:0,lvQ:m.license,ultra:0,cine:null,
-     banner:{t:'Vague 1',s:h.hero+' entre en scène !',life:2.4,max:2.4},callout:null};
+     kills:0,bosses:0,boss:null,shake:0,flash:0,hurtT:0,lvQ:m.license,ultra:0,cine:null,civs:[],bonusPH:0,phase:'fight',obj:null,
+     banner:null,callout:null};
+  startWave(1);
   cam.x=0;cam.y=0;resetJoy();lastCd=-1;lastU=-1;
   save.runs++;persist();
   spBtn.textContent=h.sp;spBtn.style.setProperty('--hc',h.col);
@@ -545,7 +555,7 @@ function dropGem(x,y,v){
   if(G.gems.length>260){const g=G.gems[(Math.random()*G.gems.length)|0];if(g.k==='xp'){g.v+=v;return;}}
   G.gems.push({x:x+rnd(-8,8),y:y+rnd(-8,8),k:'xp',v});}
 function kill(e){
-  e.dead=true;G.kills++;burst(e.x,e.y,e.col,e.boss?44:8,e.boss?120:40);
+  e.dead=true;G.kills++;if(e.elite){G.elitesKilled++;for(let i=0;i<4;i++)dropGem(e.x+rnd(-20,20),e.y+rnd(-20,20),e.xp*(1+G.wave*0.05));}burst(e.x,e.y,e.col,e.boss?44:8,e.boss?120:40);
   const p=G.p;addUltra(e.boss?35:0.7);
   if(e.look&&G.fx.length<400){const dir=Math.hypot(e.kx,e.ky)>20?Math.atan2(e.ky,e.kx):Math.atan2(e.y-p.y,e.x-p.x),sp=e.boss?60:170;
     G.fx.push({k:'d',key:e.lkey,draw:e.look._d,size:e.size,x:e.x,y:e.y+e.r*0.85,vx:Math.cos(dir)*sp,vy:Math.sin(dir)*sp,rot:0,
@@ -873,19 +883,57 @@ function spawnBoss(){
   G.boss=e;G.banner=null;snd('boss');resetJoy();
   G.cine={kind:'boss',t:0,dur:2.8,title:B.name,sub:B.sub,line:B.line,look:e.look,bg:B.col,col:B.bcol,end:()=>{G.shake=12;}};
 }
+function makeObj(n){
+  if(n%5===0)return{type:'boss',goal:1,intro:'Vaincs le vilain qui attaque la ville'};
+  const cyc=['survive','kill','rescue','elite'],t=n<=4?cyc[n-1]:cyc[(hash(n,11)*4)|0];
+  if(t==='survive'){const g=Math.min(60,28+Math.round(n*1.2));return{type:t,goal:g,intro:`Survis ${g} secondes`};}
+  if(t==='kill'){const g=20+n*5;return{type:t,goal:g,intro:`Mets ${g} vilains K.O.`};}
+  if(t==='rescue'){const g=Math.min(6,3+Math.floor(n/8));return{type:t,goal:g,intro:`Sauve ${g} civils pris au piège`};}
+  const g=Math.min(6,2+Math.floor(n/7));return{type:'elite',goal:g,intro:`Abats ${g} vilains d’élite`};}
+function startWave(n){
+  G.wave=n;G.waveT=0;G.phase='fight';G.killsAtStart=G.kills;G.saved=0;G.elitesKilled=0;G.elitesSpawned=0;G.civs=[];G.spawnT=0.8;
+  G.obj=makeObj(n);
+  if(G.obj.type==='boss')spawnBoss();
+  else G.banner={t:'Vague '+n,s:G.obj.intro,life:2.6,max:2.6};
+  if(G.obj.type==='rescue')spawnCivs(G.obj.goal);
+}
+function objProgress(){const o=G.obj;
+  switch(o.type){case 'survive':return Math.min(G.waveT,o.goal);case 'kill':return Math.min(G.kills-G.killsAtStart,o.goal);
+    case 'rescue':return G.saved;case 'elite':return G.elitesKilled;default:return G.boss?0:1;}}
+function clearWave(){
+  const p=G.p;G.phase='clear';G.clearT=3.6;
+  const list=G.en.filter(e=>!e.dead).sort((a,b)=>Math.hypot(a.x-p.x,a.y-p.y)-Math.hypot(b.x-p.x,b.y-p.y));
+  list.forEach((e,i)=>pend(Math.min(1.1,0.05+i*0.012),0,0,0,null,()=>{if(e.dead)return;if(i<40)boom(e.x,e.y,20,'dust',0.35);e.boss=false;kill(e);}));
+  G.es=[];G.zones=[];G.civs=[];
+  for(let i=0;i<3;i++)ring(p.x,p.y,20,260+i*180,'#ffd23f',0.6+i*0.15,10-i*2);
+  const bonus=5+G.wave*3;G.bonusPH+=bonus;p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.1);
+  text(p.x,p.y-p.r-30,'+'+bonus+' PH','#ffd23f',true);
+  G.banner={t:'Vague '+G.wave+' terminée !',s:'Prochaine : '+makeObj(G.wave+1).intro,life:3.4,max:3.4,clear:true};
+  G.flash=0.35;snd('lvl');
+}
+function spawnCivs(n){const p=G.p;for(let i=0;i<n;i++){const a=i*TAU/n+rnd(-0.4,0.4),d=rnd(230,420),k=i%CIV_LOOKS.length;
+  G.civs.push({x:p.x+Math.cos(a)*d,y:p.y+Math.sin(a)*d,prog:0,look:CIV_LOOKS[k],lkey:'civ'+k,t:rnd(0,1),r:11});lookFn(CIV_LOOKS[k]);}}
+function updCivs(dt){const p=G.p;
+  for(const c of G.civs){c.t+=dt;const d=Math.hypot(p.x-c.x,p.y-c.y);
+    if(d<48){c.prog+=dt/1.1;if(Math.random()<0.4)part(c.x+rnd(-12,12),c.y-rnd(0,30),0,-40,'#7cffb2',0.4,2.5);}else c.prog=Math.max(0,c.prog-dt*0.5);
+    if(c.prog>=1){c.done=true;G.saved++;p.hp=Math.min(p.maxHp,p.hp+6);text(c.x,c.y-40,'Sauvé !','#7cffb2',true);
+      ring(c.x,c.y,6,60,'#7cffb2',0.5,6);for(let k=0;k<3;k++)dropGem(c.x,c.y,2*(1+G.wave*0.05));snd('heal');addUltra(5);}}
+  G.civs=G.civs.filter(c=>!c.done);}
+function spawnElite(){const e=spawnEnemy('nomu');e.elite=true;e.look=ELITE_LOOK;e.lkey='e_elite';lookFn(ELITE_LOOK);
+  e.r*=1.15;e.size*=1.2;e.hp*=2.5;e.maxHp=e.hp;e.dmg*=1.1;e.xp*=4;e.spd*=1.15;G.elitesSpawned++;}
 function waveUpdate(dt){
+  if(G.phase==='clear'){G.clearT-=dt;for(const g of G.gems)g.pull=true;if(G.clearT<=0)startWave(G.wave+1);return;}
   G.waveT+=dt;
-  if(G.waveT>=G.waveLen&&!G.boss){
-    G.wave++;G.waveT=0;
-    if(G.wave%5===0)spawnBoss();else G.banner={t:'Vague '+G.wave,s:pick(WAVE_LINES),life:1.9,max:1.9};
-  }
+  if(G.obj.type!=='boss'||G.bossSeen){if(objProgress()>=G.obj.goal){G.bossSeen=false;clearWave();return;}}
+  if(G.obj.type==='boss'&&G.boss)G.bossSeen=true;
+  if(G.obj.type==='rescue')updCivs(dt);
+  if(G.obj.type==='elite'&&G.elitesSpawned<G.obj.goal){let alive=0;for(const e of G.en)if(e.elite&&!e.dead)alive++;
+    if(alive<2&&G.waveT>2+G.elitesSpawned*5)spawnElite();}
   G.spawnT-=dt;
   if(G.spawnT<=0){const w=G.wave;let iv=Math.max(0.2,1.05-w*0.045);if(G.boss)iv*=1.8;G.spawnT=iv;
     const n=1+Math.floor(w/5)+(Math.random()<(w%5)/5?1:0);
     for(let i=0;i<n&&G.en.length<MAXE;i++)spawnEnemy(pickType());}
 }
-
-/* ---------------- BOSS ---------------- */
 function bossUpdate(e,dt,dx,dy,d){
   const p=G.p,sp=e.spd*(e.slowT>0?0.6:1);e.bt-=dt;
   if(e.bstate==='move'){
@@ -1074,7 +1122,7 @@ function playerDown(){const p=G.p;
     ring(p.x,p.y,10,230,'#7cffb2',0.6,10);snd('heal');return;}
   gameOver();}
 function gameOver(){
-  const p=G.p,w=G.wave,gain=Math.floor(G.kills*0.4+(w-1)*12+G.bosses*60+p.lvl*2);
+  const p=G.p,w=G.wave,gain=Math.floor(G.kills*0.4+(w-1)*12+G.bosses*60+p.lvl*2+G.bonusPH);
   const rec=w>save.best.wave;
   save.ph+=gain;save.totalKills+=G.kills;if(rec)save.best.wave=w;save.best.kills=Math.max(save.best.kills,G.kills);
   save.bestBy[p.h.id]=Math.max(save.bestBy[p.h.id]||0,w);persist();
@@ -1172,6 +1220,7 @@ function drawHead(c,L,mouthOpen){
     case 'hoodie':{c.beginPath();c.arc(X-R*0.05,Y-R*0.02,R*1.12,0,TAU);gfill(c,L.hood,X+R,Y-R,X-R,Y+R);
       c.beginPath();c.ellipse(X+R*0.4,Y+R*0.1,R*0.6,R*0.66,0,0,TAU);c.fillStyle='#07070d';c.fill();c.lineWidth=1.6;c.strokeStyle=INK;c.stroke();
       glow(L.eye);break;}
+    case 'face':{face();drawHair(c,L,X,Y,R);eyes();mouth();break;}
     case 'brute':{c.beginPath();c.arc(X,Y,R,0,TAU);gfill(c,L.helm,X+R,Y-R,X-R,Y+R);
       rr(c,X-R*0.02,Y+R*0.06,R*1.05,R*0.66,R*0.22);gfill(c,'#c9ced9',X+R,Y,X,Y+R*0.7);
       c.strokeStyle=INK;c.lineWidth=1.1;for(let i=1;i<5;i++){const gx=X+R*0.02+i*R*0.2;c.beginPath();c.moveTo(gx,Y+R*0.12);c.lineTo(gx,Y+R*0.66);c.stroke();}
@@ -1286,6 +1335,11 @@ const ENEMY_LOOKS={
  nomu:[{suit:'#4a5068',trim:'#2c3042',accent:'#9aa3c7',glove:'#2c3042',boot:'#2c3042',helmet:'brute',helm:'#2c3042',eye:'#ff4d6d',bulk:1.7,armLen:1.3,head:0.85,pads:'#2c3042',chest:'none'}],
  minion:[{suit:'#2a2433',trim:'#15111b',accent:'#ff5c8a',glove:'#15111b',boot:'#15111b',helmet:'mask',hair:'#15111b',hairStyle:'flat',skin:'#c7a08a',mask:'#ff5c8a',chest:'v'}],
 };
+const CIV_LOOKS=[
+ {suit:'#d9d2c3',trim:'#5a4a3a',accent:'#c0392b',glove:'#e2b08c',boot:'#3a3a45',helmet:'face',hair:'#3b2a1e',hairStyle:'flat',skin:'#e2b08c',chest:'none'},
+ {suit:'#6aa0c8',trim:'#2d3b55',accent:'#f6f2e6',glove:'#c98d68',boot:'#2d3b55',helmet:'face',hair:'#1a1a1a',hairStyle:'bob',skin:'#c98d68',chest:'v'},
+ {suit:'#e8a0b4',trim:'#4a3046',accent:'#fff3f7',glove:'#f1c7a1',boot:'#4a3046',helmet:'face',hair:'#c9a36a',hairStyle:'spike',skin:'#f1c7a1',chest:'band'}];
+const ELITE_LOOK={suit:'#5a1d2a',trim:'#2a0d14',accent:'#ffd23f',glove:'#2a0d14',boot:'#2a0d14',helmet:'horns',helm:'#2a0d14',visor:'#14070a',eye:'#ffd23f',bulk:1.6,armLen:1.25,pads:'#ffd23f',cape:'#2a0d14',chest:'v'};
 const BOSS_LOOKS=[
  {suit:'#3d4258',trim:'#23263a',accent:'#9aa3c7',glove:'#23263a',boot:'#23263a',helmet:'brute',helm:'#23263a',eye:'#ff4d6d',bulk:1.9,armLen:1.35,head:0.85,pads:'#23263a',chest:'none'},
  {suit:'#2a2f3a',trim:'#14171e',accent:'#c9ccd6',glove:'#14171e',boot:'#14171e',helmet:'hoodie',hood:'#3a4250',eye:'#ff4d6d',cape:'#1b1f27',stride:1.3,bulk:0.95,chest:'sash'},
@@ -1339,6 +1393,7 @@ function drawGround(){
 function drawEnemy(e){
   const flo=e.floatT>0,lift=flo?10+Math.sin(G.time*6+e.id)*3:0,size=e.size,fy=e.y+e.r*0.85,y=fy-lift;
   ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(e.x,fy,e.r*(flo?0.7:1.05),e.r*0.38,0,0,TAU);ctx.fill();
+  if(e.elite){ctx.strokeStyle='#ffd23f';ctx.globalAlpha=0.5+0.35*Math.sin(G.time*8);ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,fy,e.r*1.4,e.r*0.55,0,0,TAU);ctx.stroke();ctx.globalAlpha=1;}
   if(e.boss){ctx.strokeStyle=e.bcol;ctx.globalAlpha=0.45+0.3*Math.sin(G.time*6);ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(e.x,fy,e.r*1.35,e.r*0.52,0,0,TAU);ctx.stroke();ctx.globalAlpha=1;}
   const still=e.freezeT>0||flo||e.fuse>0,fr=still?0:Math.floor(e.walk/7)%FR,sc=sprScale(size),flip=G.p.x<e.x,d=e.look._d;
   const ps=e.freezeT>0?'':e.boss?(e.bstate==='tele'?(e.pat==='slam'?'u':'a'):e.bstate==='act'?'a':e.atk>0?'u':''):(e.atk>0?'a':'');
@@ -1347,8 +1402,17 @@ function drawEnemy(e){
   if(e.bomb&&e.fuse>0&&((G.time*20)|0)%2){ctx.globalAlpha=0.75;blit(sprite(e.lkey,d,fr,ps,sc,'w'),e.x,y,size,flip);ctx.globalAlpha=1;}
   const top=y-50*size;
   if(flo){ctx.strokeStyle='#cdb0ff';ctx.lineWidth=2;ctx.setLineDash([4,4]);ctx.beginPath();ctx.ellipse(e.x,y-24*size,e.r+8,30*size,0,0,TAU);ctx.stroke();ctx.setLineDash([]);}
+  if(e.elite){ctx.font=`italic 900 16px ${COND}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=4;ctx.strokeStyle='#000';ctx.strokeText('★',e.x,top-16);ctx.fillStyle='#ffd23f';ctx.fillText('★',e.x,top-16);}
   if(!e.boss&&e.hp<e.maxHp){const w=Math.max(18,e.r*2);ctx.fillStyle='#000';ctx.fillRect(e.x-w/2-1,top-7,w+2,5);ctx.fillStyle='#ff4d6d';ctx.fillRect(e.x-w/2,top-6,w*Math.max(0,e.hp/e.maxHp),3);}
 }
+function drawCiv(c){const fy=c.y+c.r*0.85,sz=0.8,ps=((c.t*2.8)|0)%2?'u':'';
+  ctx.fillStyle='rgba(0,0,0,.38)';ctx.beginPath();ctx.ellipse(c.x,fy,11,4,0,0,TAU);ctx.fill();
+  ctx.strokeStyle='#7cffb2';ctx.globalAlpha=0.5+0.3*Math.sin(G.time*5);ctx.lineWidth=2.5;ctx.setLineDash([5,5]);ctx.beginPath();ctx.ellipse(c.x,fy,48,18,0,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+  blit(sprite(c.lkey,c.look._d,0,ps,sprScale(sz),'n'),c.x,fy,sz,G.p.x<c.x);
+  const top=fy-46;
+  if(c.prog>0){ctx.strokeStyle='#000';ctx.lineWidth=6;ctx.beginPath();ctx.arc(c.x,top-10,11,0,TAU);ctx.stroke();ctx.strokeStyle='#7cffb2';ctx.lineWidth=4;ctx.beginPath();ctx.arc(c.x,top-10,11,-Math.PI/2,-Math.PI/2+TAU*c.prog);ctx.stroke();}
+  else{rr(ctx,c.x-31,top-20,62,18,6);ctx.fillStyle='#f6f2e6';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#000';ctx.stroke();
+    ctx.font=`italic 900 12px ${COND}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#111';ctx.fillText('À L’AIDE',c.x,top-11);}}
 function drawBossTele(e){
   ctx.save();const a=0.25+0.25*Math.sin(G.time*30);
   if(e.pat==='charge'||e.pat==='dash'){ctx.strokeStyle=`rgba(255,77,109,${a+0.2})`;ctx.lineWidth=e.r*1.6;ctx.lineCap='round';
@@ -1454,13 +1518,20 @@ function drawHUD(){
   ctx.font=`italic 900 16px ${COND}`;ctx.fillStyle='#ffd23f';ctx.fillText('NIV '+p.lvl,L,T+52);
   ctx.fillStyle='#f6f2e6';ctx.fillText(G.kills+' K.O.',L+56,T+52);
   ctx.textAlign='right';ctx.font=`italic 900 24px ${COND}`;ctx.fillStyle='#f6f2e6';ctx.fillText('VAGUE '+G.wave,R-52,T+30);
-  ctx.font=`italic 900 14px ${COND}`;ctx.fillStyle=G.boss?'#ff4d6d':'#a3abd0';
-  ctx.fillText(G.boss?'BOSS':Math.max(0,Math.ceil(G.waveLen-G.waveT))+' s',R-52,T+50);
-  if(G.boss){const b=G.boss,y=T+72;ctx.textAlign='left';ctx.font=`italic 900 15px ${COND}`;ctx.fillStyle='#ff4d6d';ctx.fillText(b.name.toUpperCase(),L,y);
+  const o=G.obj,y=T+74;
+  if(G.phase==='clear'){ctx.textAlign='left';ctx.font=`italic 900 15px ${COND}`;ctx.fillStyle='#7cffb2';ctx.fillText('VAGUE TERMINÉE : L’XP ARRIVE !',L,y);bar(L,y+10,R-L,8,1,'#7cffb2');}
+  else if(G.boss){const b=G.boss;ctx.textAlign='left';ctx.font=`italic 900 15px ${COND}`;ctx.fillStyle='#ff4d6d';ctx.fillText('BOSS : '+b.name.toUpperCase(),L,y);
     bar(L,y+10,R-L,10,b.hp/b.maxHp,'#c9184a');}
+  else if(o&&o.type!=='boss'){const pr=objProgress(),lab={survive:'SURVIS',kill:'VILAINS K.O.',rescue:'CIVILS SAUVÉS',elite:'ÉLITES ABATTUS'}[o.type],
+      col={survive:'#4cc9f0',kill:'#ff9f1c',rescue:'#7cffb2',elite:'#ffd23f'}[o.type];
+    ctx.textAlign='left';ctx.font=`italic 900 15px ${COND}`;ctx.fillStyle=col;ctx.fillText('OBJECTIF : '+lab,L,y);
+    ctx.textAlign='right';ctx.fillStyle='#f6f2e6';ctx.fillText(o.type==='survive'?Math.max(0,Math.ceil(o.goal-G.waveT))+' s':pr+' / '+o.goal,R,y);
+    bar(L,y+10,R-L,8,pr/o.goal,col);}
+  for(const c of G.civs)edgeArrow(c.x,c.y,'#7cffb2','!');
+  for(const e of G.en)if(e.elite&&!e.dead)edgeArrow(e.x,e.y,'#ffd23f','★');
   if(G.banner){const b=G.banner,t=b.life/b.max,al=Math.min(1,(1-t)*6,t*4);ctx.globalAlpha=al;
     const y=H*0.3,sz=fitSize(b.t.toUpperCase(),b.boss?54:46,W-40);
-    skewText(b.t.toUpperCase(),W/2,y,sz,b.boss?'#ff4d6d':'#ffd23f','#000',8);
+    skewText(b.t.toUpperCase(),W/2,y,sz,b.boss?'#ff4d6d':b.clear?'#7cffb2':'#ffd23f','#000',8);
     ctx.font=`600 15px -apple-system,system-ui,sans-serif`;ctx.textAlign='center';ctx.fillStyle='#f6f2e6';ctx.fillText(b.s,W/2,y+sz*0.62+6);
     ctx.globalAlpha=1;}
   if(G.callout){const c=G.callout,t=c.life/c.max,sc=t>0.85?1+(t-0.85)*3:1;ctx.globalAlpha=Math.min(1,t*4);
@@ -1468,6 +1539,11 @@ function drawHUD(){
   if(G.time<5&&G.wave===1){ctx.globalAlpha=Math.min(1,(5-G.time));ctx.font='600 14px -apple-system,system-ui,sans-serif';ctx.textAlign='center';
     ctx.fillStyle='#a3abd0';ctx.fillText('Glisse ton pouce n’importe où pour te déplacer',W/2,H-SAFE.b-150);ctx.globalAlpha=1;}
 }
+function edgeArrow(wx,wy,col,ic){const sx=W/2+(wx-cam.x)*Z,sy=H/2+(wy-cam.y)*Z,m=34;
+  if(sx>-10&&sx<W+10&&sy>-10&&sy<H+10)return;
+  const cx=W/2,cy=H/2,a=Math.atan2(sy-cy,sx-cx),k=Math.min((W/2-m)/Math.abs(Math.cos(a)||1e-6),(H/2-m-60)/Math.abs(Math.sin(a)||1e-6)),x=cx+Math.cos(a)*k,y=cy+Math.sin(a)*k;
+  ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.fillStyle=col;ctx.strokeStyle='#000';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(-8,-11);ctx.lineTo(-4,0);ctx.lineTo(-8,11);ctx.closePath();ctx.stroke();ctx.fill();ctx.restore();
+  ctx.font=`italic 900 15px ${COND}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=4;ctx.strokeStyle='#000';ctx.strokeText(ic,x-Math.cos(a)*20,y-Math.sin(a)*20);ctx.fillStyle=col;ctx.fillText(ic,x-Math.cos(a)*20,y-Math.sin(a)*20);}
 function drawJoy(){if(!joy.on||state!=='play')return;
   ctx.globalAlpha=0.35;ctx.strokeStyle='#f6f2e6';ctx.lineWidth=3;ctx.beginPath();ctx.arc(joy.ox,joy.oy,JR,0,TAU);ctx.stroke();
   const dx=joy.x-joy.ox,dy=joy.y-joy.oy,d=Math.hypot(dx,dy),k=d>JR?JR/d:1;
@@ -1485,8 +1561,8 @@ function render(){
   for(const q of G.pend)if(q.r>0)drawTele(q);
   for(const e of G.en)if(e.boss&&e.bstate==='tele')drawBossTele(e);
   for(const g of G.gems)drawGem(g);
-  const order=G.en.filter(e=>!e.dead);order.push(p);order.sort((a,b)=>(a.y+a.r)-(b.y+b.r));
-  for(const o of order){if(o===p)drawPlayer(p);else drawEnemy(o);}
+  const order=G.en.filter(e=>!e.dead);order.push(p);for(const c of G.civs)order.push(c);order.sort((a,b)=>(a.y+a.r)-(b.y+b.r));
+  for(const o of order){if(o===p)drawPlayer(p);else if(o.lkey&&o.lkey.startsWith('civ'))drawCiv(o);else drawEnemy(o);}
   for(const s of G.shots)drawShot(s);
   for(const f of G.fx)drawFx(f);
   for(const s of G.es)drawEShot(s);
@@ -1525,17 +1601,25 @@ function renderHeroes(){
   document.querySelectorAll('.hspr').forEach(cv=>paintFigure(cv,skinLook(cv.dataset.h,save.skin[cv.dataset.h]),0.17,'',cv.dataset.lock==='1'));
 }
 let menuPorFrame=0;
+setInterval(()=>{if($('#skins').classList.contains('show')){skinTick++;paintBig();}},120);
 setInterval(()=>{const c=document.getElementById('menuPor');if(!c||!$('#menu').classList.contains('show'))return;
   menuPorFrame=(menuPorFrame+1)%FR;const h=HMAP[save.selected]||HEROES[0];paintFigure(c,skinLook(h.id,save.skin[h.id]),menuPorFrame/FR,menuPorFrame===3?'a':'');},140);
 let skinHero='deku';
-function renderSkins(hid){if(hid)skinHero=hid;const h=HMAP[skinHero],own=save.skins[h.id]||[0],sel=save.skin[h.id]||0,best=save.bestBy[h.id]||0;
+let skinPrev=0,skinTick=0;
+function renderSkins(hid){if(hid){skinHero=hid;skinPrev=save.skin[hid]||0;}const h=HMAP[skinHero],own=save.skins[h.id]||[0],sel=save.skin[h.id]||0,best=save.bestBy[h.id]||0;
   $('#skinPH').textContent=save.ph+' PH';$('#skinTitle').textContent='Tenues de '+h.hero;
   $('#skinList').innerHTML=SKINS.map((S,i)=>{const has=own.includes(i),isSel=sel===i,reqOk=!S.req||best>=S.req,can=reqOk&&save.ph>=S.cost;
-    return `<div class="skcard ${isSel?'sel':''}"><canvas class="skpor" data-i="${i}"></canvas><div class="sknm">${S.name}</div>
+    return `<div class="skcard ${isSel?'sel':''} ${skinPrev===i?'pv':''}" data-act="preview" data-id="${i}"><canvas class="skpor" data-i="${i}"></canvas><div class="sknm">${S.name}</div>
       ${has?(isSel?'<span class="tag">Équipée</span>':`<button class="btn sm" data-act="equip" data-id="${i}">Équiper</button>`)
         :(!reqOk?`<p class="small">Atteins la vague ${S.req} avec ${h.hero}, puis ${S.cost} PH</p>`
         :`<button class="btn sm ${can?'':'ghost'}" data-act="buyskin" data-id="${i}" ${can?'':'disabled'}>${S.cost} PH</button>`)}</div>`;}).join('');
-  document.querySelectorAll('.skpor').forEach(c=>paintFigure(c,skinLook(h.id,+c.dataset.i),0.17,''));}
+  document.querySelectorAll('.skpor').forEach(c=>paintFigure(c,skinLook(h.id,+c.dataset.i),0.17,''));
+  const S=SKINS[skinPrev],has=own.includes(skinPrev);$('#skinBigName').textContent=S.name;
+  $('#skinBigInfo').textContent=has?(sel===skinPrev?'Tenue équipée':'Tenue débloquée : touche Équiper'):(S.req&&best<S.req?`Vague ${S.req} avec ${h.hero} requise, puis ${S.cost} PH`:`Aperçu : ${S.cost} PH pour la débloquer`);
+  paintBig();}
+function paintBig(){const c=document.getElementById('skinBig');if(!c)return;const h=HMAP[skinHero],L=skinLook(h.id,skinPrev),k=skinTick%16;
+  const pose=k>=12?{fa:-1.5,fe:1.32,ba:0.75,lean:0.25,fl:-0.4,bl:0.35,still:true,gf:{c:h.col,r:9}}:k>=9?{fa:1,ba:-0.4,crouch:2,lean:-0.15,still:true,gf:{c:h.col,r:6}}:'';
+  paintFigure(c,L,(skinTick%FR)/FR,pose);}
 function renderShop(){
   $('#shopPH').textContent=save.ph+' PH';
   $('#shopList').innerHTML=META.map(m=>{const l=save.meta[m.id]||0,max=l>=m.max,c=m.cost(l),can=save.ph>=c;
@@ -1552,6 +1636,7 @@ document.addEventListener('click',e=>{
     case 'shop':renderShop();setState('menu','shop');break;
     case 'help':setState('menu','help');break;
     case 'skins':setState('menu','skins');renderSkins(id);break;
+    case 'preview':skinPrev=+id;renderSkins();break;
     case 'equip':{const i=+id;if((save.skins[skinHero]||[0]).includes(i)){save.skin[skinHero]=i;persist();renderSkins();}break;}
     case 'buyskin':{const i=+id,S=SKINS[i],own=save.skins[skinHero]||[0],best=save.bestBy[skinHero]||0;
       if(S&&!own.includes(i)&&save.ph>=S.cost&&(!S.req||best>=S.req)){save.ph-=S.cost;own.push(i);save.skins[skinHero]=own;save.skin[skinHero]=i;persist();snd('lvl');renderSkins();}break;}
