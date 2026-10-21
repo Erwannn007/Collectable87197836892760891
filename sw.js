@@ -1,6 +1,6 @@
 /* Service worker : cache-first, cache versionné.
    Pense à incrémenter VERSION à chaque mise à jour du jeu. */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const PREFIX = 'plus-ultra-rogue-';
 const CACHE = PREFIX + VERSION;
 const ASSETS = [
